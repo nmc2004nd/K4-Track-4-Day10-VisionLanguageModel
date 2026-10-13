@@ -1,4 +1,4 @@
-Họ tên: TODO_NAME
+Họ tên: Nguyễn Mạnh Cường — MSV: 2A202602823
 `dataset_version`: d10-21e4070301
 
 Môi trường: Colab T4 15 GB (điều khiển bằng `google-colab-cli` từ terminal), torch 2.11 + cu130, transformers 5.19.0, peft 0.21.2, bitsandbytes 0.50.2, trl 1.9.2. Mã của tôi: `vlmlab/` (`labels.py` nhãn/prompt/reward, `run.py` train/infer/inspect, `viz.py` ảnh, `grpo.py` E5), script điều khiển Colab trong `colab/`. Log: `report/logs/`, ảnh: `report/figures/`.
@@ -149,4 +149,16 @@ TODO_Q10
 
 ## Nhìn lại
 
-TODO_LOOK
+**Lỗi tôi gặp mà công cụ chấm không bắt được:**
+- **ViT bị lượng tử hoá 4-bit một cách im lặng** (transformers 5.19 so khớp `llm_int8_skip_modules` bằng `re.match` từ đầu tên, nên `"visual"` không khớp `model.visual.*`). Không có cảnh báo nào; E0/E1 vẫn chạy bình thường. Tôi chỉ phát hiện vì số tham số projector ra 54,6M (một nửa 109,1M) và E3 crash khi unscale. Nếu chỉ chạy E0/E1 thì kết quả sẽ âm thầm dùng ViT 4-bit, khác đề. Tôi thêm assert `Linear4bit trong ViT = 0`.
+- **torchao 0.10 có sẵn trên Colab làm peft 0.21.2 crash** khi gắn LoRA vào lớp Linear fp16 của ViT (chỉ xảy ra ở E3, sau khi đã sửa lỗi trên). Gỡ torchao là đủ.
+- **Toàn bộ 2.009 ảnh đều có ít nhất một box** (0 ảnh rỗng ở cả ba split). Model không bao giờ được dạy trả `[]`, và test cũng không đo được báo động giả trên đường lành. FP/ảnh ≈ 1,1 chỉ đo trên ảnh có hư hại; trên dashcam thật (phần lớn khung hình không có hư hại) tỉ lệ báo động giả có thể tệ hơn nhiều.
+- **Nhãn chồng lấn giữa các lớp**: có box "crack" lớn bao trọn vùng chứa nhiều "pothole" (ví dụ `report/figures/e3/sai_vlcsnap-2025-02-19-17h03m29s526.jpg`). Trọng tài ghép cặp theo từng lớp với IoU ≥ 0,5 nên một dự đoán hợp lý về mặt ngữ nghĩa vẫn bị tính 1 FP + 1 FN.
+- **Một output hỏng xoá mọi box đúng của ảnh đó**: `parse_output` trả `None` cho cả ảnh nếu JSON bị cắt hoặc một box sai hình học. Các ảnh hỏng sau fine-tune (E1: 1, E2: 1, E3: 2 trên 311) **đều là JSON bị cắt cụt ở `max_new_tokens=256`** (≈ 443 ký tự) vì model lặp box trên ảnh nhiều hư hại, cùng kiểu lỗi với E0 nhưng hiếm hơn nhiều. Trọng tài chỉ thấy `parse_valid_rate`, không phân biệt "lặp vô hạn" với "JSON sai cú pháp".
+- **Colab free thu hồi VM** giữa lúc chạy E2 (mất ~1 giờ GPU) vì kết quả chưa được tải về. Từ đó tôi tải adapter ngay sau khi train xong (`colab/autofetch.sh`) và viết `pipeline.sh` bỏ qua bước đã xong.
+
+**Điều tôi chưa hiểu / chưa kiểm chứng:**
+- E2 mở cả `merger` (27M) lẫn `deepstack_merger_list` (82M) cùng lúc, nên tôi không biết phần +0,065 F1 đến từ đâu; một ablation tách hai phần này sẽ trả lời câu hỏi DeepStack (đặc trưng ViT tầng 5/11/17) có quan trọng cho box nhỏ hay không.
+- Loss train của E3 không thấp hơn E2 (0,525 vs 0,520 trung bình 50 bước cuối) nhưng F1 test nhỉnh hơn; với CI hiện tại tôi không phân biệt được đây là tín hiệu thật hay nhiễu.
+- Tôi chưa thử độ phân giải ảnh cao hơn (nhiều hơn 220 token); với pothole trung vị chỉ ~1 token ảnh, đây có lẽ là đòn bẩy lớn hơn mọi cách mở khối.
+- E5 (GRPO) tôi bỏ vì giới hạn thời gian GPU. Hàm reward `vlmlab/labels.py::reward_iou` và 6 test (hoàn hảo, JSON hỏng, sai lớp, thừa box, rỗng, box khổng lồ) đã viết và chạy qua (`python -m pytest vlmlab/tests`); `vlmlab/grpo.py` đã viết theo API trl 1.9.2 nhưng **chưa chạy trên GPU**.
