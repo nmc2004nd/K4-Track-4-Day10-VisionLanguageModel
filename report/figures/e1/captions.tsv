@@ -1,0 +1,6 @@
+dung_vlcsnap-2025-02-18-23h13m48s064.jpg	TP=2 FP=0 FN=0	GT=['manhole', 'manhole']	PRED=['manhole', 'manhole']
+dung_vlcsnap-2025-02-19-17h04m49s140.jpg	TP=3 FP=0 FN=1	GT=['pothole', 'pothole', 'pothole', 'crack']	PRED=['pothole', 'pothole', 'pothole']
+dung_vlcsnap-00202.jpg	TP=1 FP=0 FN=0	GT=['manhole']	PRED=['manhole']
+sai_vlcsnap-2025-02-18-23h30m29s192.jpg	TP=0 FP=7 FN=5	GT=['crack', 'pothole', 'pothole', 'pothole', 'pothole']	PRED=['crack', 'crack', 'crack', 'crack', 'crack', 'crack', 'crack']
+sai_vlcsnap-2025-02-19-17h08m59s876.jpg	TP=0 FP=4 FN=5	GT=['pothole', 'pothole', 'pothole', 'crack', 'crack']	PRED=['crack', 'pothole', 'pothole', 'pothole']
+sai_vlcsnap-00201.jpg	TP=0 FP=3 FN=2	GT=['manhole', 'crack']	PRED=['crack', 'crack', 'crack']

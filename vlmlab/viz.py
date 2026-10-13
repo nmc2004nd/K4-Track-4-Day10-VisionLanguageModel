@@ -60,9 +60,17 @@ def main():
         scored.append((tp, fp, fn, e, pred))
     good = sorted([s for s in scored if s[0] > 0], key=lambda s: (-(s[0] - s[1] - s[2]), s[3]["image_id"]))
     bad = sorted([s for s in scored if s[1] + s[2] > 0], key=lambda s: (-(s[1] + s[2]), s[3]["image_id"]))
+    def one_per_session(group, k):  # frame liền kề gần trùng nhau → mỗi phiên quay lấy một ảnh
+        seen, out = set(), []
+        for s in group:
+            if s[3]["session"] not in seen:
+                seen.add(s[3]["session"])
+                out.append(s)
+        return out[:k]
+
     half = a.n // 2
     lines = []
-    for tag, group in (("dung", good[:half]), ("sai", bad[:a.n - half])):
+    for tag, group in (("dung", one_per_session(good, half)), ("sai", one_per_session(bad, a.n - half))):
         for tp, fp, fn, e, pred in group:
             name = f"{tag}_{e['image_id']}.jpg"
             draw(e, pred).save(out / name, quality=88)
