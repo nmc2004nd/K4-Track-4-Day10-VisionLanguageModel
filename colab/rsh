@@ -1,0 +1,17 @@
+#!/bin/bash
+# chạy lệnh shell trên VM Colab (thử lại khi rớt mạng): rsh [timeout_s] "cmd"
+T=${2:+$1}; T=${T:-110}; CMD=${2:-$1}
+F=$(mktemp /tmp/rsh_XXXX.py)
+python3 - "$CMD" > $F <<'PY'
+import sys, json
+cmd = sys.argv[1]
+print("import subprocess\nr=subprocess.run(%s, shell=True, capture_output=True, text=True, executable='/bin/bash')\nprint(r.stdout[-8000:]); print(r.stderr[-3000:])" % json.dumps("mkdir -p /content/lab; cd /content/lab; " + cmd))
+PY
+for i in 1 2 3 4 5 6; do
+  OUT=$(colab exec -s lab --timeout $T -f $F 2>&1)
+  if echo "$OUT" | grep -qE "ConnectionError|Network is unreachable|WebSocketConnectionClosed|Max retries|Traceback \(most recent call last\) ─"; then
+    echo "[rsh] lỗi mạng, thử lại $i" >&2; sleep 10; continue
+  fi
+  echo "$OUT"; rm -f $F; exit 0
+done
+echo "$OUT" | tail -5; rm -f $F; exit 1
