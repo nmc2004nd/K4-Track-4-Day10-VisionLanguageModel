@@ -1,0 +1,12 @@
+{
+  "setup": "e2",
+  "rank": 16,
+  "alpha": 32,
+  "train_fraction": 1.0,
+  "coord": "norm1000",
+  "lora_modules": 252,
+  "trainable_params": 142135296,
+  "peak_vram_gb": 7.94,
+  "train_minutes": 47.0,
+  "max_steps": 300
+}
