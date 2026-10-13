@@ -1,0 +1,15 @@
+[load] Linear4bit: ViT=0  LLM=252
+[transformers] `use_cache=True` is incompatible with gradient checkpointing. Setting `use_cache=False`.
+[setup] e3: 348 module LoRA (r=16, alpha=32)
+[setup] trainable=148,426,752  (projector=109,105,152, lora=39,321,600)
+[train] 1422 ảnh train
+[train] {"step": 1, "loss": 1.5758, "grad_norm": 6.918, "lr": 0.0002, "min": 0.21, "vram_gb": 6.37}
+[train] run.json {"setup": "e3", "rank": 16, "alpha": 32, "train_fraction": 1.0, "coord": "norm1000", "lora_modules": 348, "trainable_params": 148426752, "peak_vram_gb": 7.58, "train_minutes": 0.7, "max_steps": 3}
+[load] Linear4bit: ViT=0  LLM=252
+[transformers] Kwargs passed to `processor.__call__` have to be in `processor_kwargs` dict, not in `**kwargs`
+[load] nạp lại 24 tensor projector (109.1M)
+[infer] 4/8  27s  '[{"label":"pothole","bbox_2d":[100,400,200,500]},{"label":"pothole","bbox_2d":[300,500,400,600]},{"label":"crack","bbox_'
+[transformers] Kwargs passed to `processor.__call__` have to be in `processor_kwargs` dict, not in `**kwargs`
+[infer] 8/8  70s  '[{"label":"pothole","bbox_2d":[100,350,200,450]},{"label":"pothole","bbox_2d":[250,400,350,500]},{"label":"pothole","bbo'
+[infer] xong 8 ảnh trong 1.2 phút
+JOB_EXIT=0

@@ -1,0 +1,25 @@
+  File "<frozen runpy>", line 203, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/content/lab/vlmlab/run.py", line 311, in <module>
+    main()
+    ~~~~^^
+  File "/content/lab/vlmlab/run.py", line 307, in main
+    {"inspect": cmd_inspect, "infer": cmd_infer, "train": cmd_train}[a.cmd](a)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^
+  File "/content/lab/vlmlab/run.py", line 257, in cmd_train
+    scaler.unscale_(opt)
+    ~~~~~~~~~~~~~~~^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/torch/amp/grad_scaler.py", line 358, in unscale_
+    optimizer_state["found_inf_per_device"] = self._unscale_grads_(
+                                              ~~~~~~~~~~~~~~~~~~~~^
+        optimizer, inv_scale, found_inf, False
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/usr/local/lib/python3.13/dist-packages/torch/amp/grad_scaler.py", line 275, in _unscale_grads_
+    raise ValueError("Attempting to unscale FP16 gradients.")
+ValueError: Attempting to unscale FP16 gradients.
+[setup] e3: 348 module LoRA (r=16, alpha=32)
+[setup] trainable=93,900,800  (projector=54,579,200, lora=39,321,600)
+[train] 1422 ảnh train
+JOB_EXIT=1

@@ -30,11 +30,17 @@ PROJECTOR_KEYS = ("visual.merger", "visual.deepstack_merger_list")
 def load_model():
     from transformers import AutoProcessor, BitsAndBytesConfig, Qwen3VLForConditionalGeneration
 
+    # transformers 5.19 so khớp skip bằng re.match (neo ở ĐẦU tên module): "visual" không khớp
+    # "model.visual.blocks.0..." nên ViT vẫn bị lượng tử hoá. Phải ghi rõ "model.visual".
     quant = BitsAndBytesConfig(
         load_in_4bit=True, bnb_4bit_quant_type="nf4", bnb_4bit_compute_dtype=torch.float16,
-        bnb_4bit_use_double_quant=True, llm_int8_skip_modules=["visual", "lm_head"])
+        bnb_4bit_use_double_quant=True, llm_int8_skip_modules=["model.visual", "visual", "lm_head"])
     model = Qwen3VLForConditionalGeneration.from_pretrained(
         MODEL_ID, quantization_config=quant, dtype=torch.float16, device_map={"": 0})
+    q_vit = [n for n, m in model.named_modules() if "visual" in n and "4bit" in type(m).__name__]
+    q_llm = [n for n, m in model.named_modules() if "language_model" in n and "4bit" in type(m).__name__]
+    print(f"[load] Linear4bit: ViT={len(q_vit)}  LLM={len(q_llm)}", flush=True)
+    assert not q_vit, f"ViT bị lượng tử hoá: {q_vit[:3]}"
     processor = AutoProcessor.from_pretrained(MODEL_ID)
     processor.tokenizer.padding_side = "left"
     return model, processor
@@ -193,6 +199,8 @@ def apply_setup(model, setup, rank, alpha):
     proj = sum(p.numel() for n, p in model.named_parameters()
                if p.requires_grad and any(k in n for k in PROJECTOR_KEYS))
     print(f"[setup] trainable={trainable:,}  (projector={proj:,}, lora={trainable - proj:,})")
+    bad = {str(p.dtype) for p in model.parameters() if p.requires_grad and p.dtype != torch.float32}
+    assert not bad, f"tham số huấn luyện không phải fp32: {bad}"
     return model, trainable, len(matched)
 
 
