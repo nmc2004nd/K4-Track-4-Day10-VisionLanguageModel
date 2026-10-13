@@ -141,7 +141,7 @@ F1 từng lớp (E3, setup tốt nhất): **pothole 0,258 < crack 0,274 ≪ manh
 - **Manhole tốt nhất**: vật thể cứng, hình tròn/vuông rõ ràng, màu kim loại tương phản, ranh giới box không mơ hồ, nên box dễ khớp IoU ≥ 0,5 (recall 0,67 ở box 0,5–2%).
 - Theo kích thước: với **mọi lớp, box < 0,5% là phần thua đậm** (crack 0/15), khớp với giới hạn độ phân giải 220 token ảnh.
 
-Ảnh minh hoạ (xanh lá = GT, vàng = dự đoán khớp, đỏ = dự đoán sai): `report/figures/e3/` (3 đúng + 3 sai, mỗi phiên quay một ảnh), `report/figures/e1/`, `report/figures/e0/`, chú thích TP/FP/FN trong `captions.tsv` từng thư mục. Ví dụ đúng `dung_vlcsnap-2025-02-19-17h04m49s140.jpg`: 3/3 ổ gà khớp, chỉ sót box crack lớn bao quanh.
+Ảnh minh hoạ (xanh lá = GT, vàng = dự đoán khớp, đỏ = dự đoán sai): `report/figures/e3/`, `report/figures/e2/`, `report/figures/e1/` (mỗi thư mục 3 đúng + 3 sai, mỗi phiên quay một ảnh), `report/figures/e0/` (2 + 2), chú thích TP/FP/FN trong `captions.tsv` từng thư mục. Ví dụ đúng `dung_vlcsnap-2025-02-19-17h04m49s140.jpg`: 3/3 ổ gà khớp, chỉ sót box crack lớn bao quanh.
 
 ### Câu 10 — E4: bạn đổi biến nào, kết quả thế nào, và kết luận có đáng tin không?
 
