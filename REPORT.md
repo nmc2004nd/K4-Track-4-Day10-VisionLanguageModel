@@ -9,11 +9,11 @@ Môi trường: Colab T4 15 GB (điều khiển bằng `google-colab-cli` từ t
 |---|---|---|---|---|---|---|---|---|---|---|
 | E0 | zero-shot | 0 | — | — (suy luận 12,9) | 0,088 | 0,062–0,117 | 0,99 | 0,135 | 0,027 | 0,185 |
 | E1 | LoRA LLM | 33.030.144 | 6,34 | 45,3 | 0,281 | 0,246–0,322 | 1,17 | 0,174 | 0,215 | 0,513 |
-| E2 | + projector | TODO_E2 |
-| E3 | + LoRA ViT | TODO_E3 |
+| E2 | + projector | 142.135.296 | 7,94 | 47,0 | 0,346 | 0,306–0,386 | 1,11 | 0,213 | 0,270 | 0,613 |
+| E3 | + LoRA ViT | 148.426.752 | 8,12 | 55,1 | 0,365 | 0,322–0,408 | 1,08 | 0,258 | 0,274 | 0,648 |
 | E4 | TODO_E4 |
 
-(`parse_valid_rate`: E0 0,932 · E1 0,997. VRAM = `torch.cuda.max_memory_allocated`, thời gian = 300 bước tối ưu, batch 2 × tích luỹ 4.)
+(`parse_valid_rate`: E0 0,932 · E1 0,997 · E2 0,997 · E3 0,994. VRAM = `torch.cuda.max_memory_allocated`, thời gian = 300 bước tối ưu, batch 2 × tích luỹ 4.)
 
 ## 10 câu hỏi
 
@@ -68,7 +68,7 @@ Lý do:
 - **Token ảnh không có "đáp án" để dự đoán**: đó là các vị trí `<|image_pad|>` được thay bằng embedding từ ViT. Bắt LLM dự đoán token tiếp theo là `<|image_pad|>` là vô nghĩa và với E3 còn đẩy gradient vào ViT theo hướng sai.
 - Token `<|im_end|>` **phải** có loss: nó dạy model dừng. Thiếu nó, model sẽ lặp box như E0 (21 ảnh JSON hỏng). E1 chỉ còn 1/311 ảnh hỏng.
 
-Ở E1 loss bắt đầu 1,58 (bước 1) và về ≈ 0,6 sau 50 bước, rồi đi ngang 0,59–0,66 đến bước 300 (`report/logs/e1_train_log.jsonl`). Nếu tính cả prompt, loss sẽ thấp hơn nhiều (prompt cố định dễ đoán) nhưng không phản ánh chất lượng box.
+Ở E1 loss bắt đầu 1,58 (bước 1) và về ≈ 0,6 sau 50 bước, rồi dao động quanh 0,57 (trung bình 50 bước cuối) đến bước 300 (`report/logs/e1_train_log.jsonl`). Nếu tính cả prompt, loss sẽ thấp hơn nhiều (prompt cố định dễ đoán) nhưng không phản ánh chất lượng box.
 
 ### Câu 5 — Vì sao không thể huấn luyện đầy đủ projector nếu ViT bị lượng tử hoá 4-bit, và bạn đã xử lý thế nào? Vì sao projector phải ở float32?
 
@@ -96,15 +96,52 @@ Cái giá: phân bố lớp lệch (val chỉ có 66 pothole) và test chỉ có
 
 ### Câu 7 — So sánh E1/E2/E3: mở projector và LoRA trên ViT có đáng không (F1, CI95, VRAM, thời gian)?
 
-TODO_Q7
+| | E1 | E2 (+projector) | E3 (+LoRA ViT) |
+|---|---|---|---|
+| F1 [CI95] | 0,281 [0,246–0,322] | 0,346 [0,306–0,386] | 0,365 [0,322–0,408] |
+| Tham số huấn luyện | 33,0M | 142,1M (+109,1M) | 148,4M (+6,3M) |
+| VRAM đỉnh | 6,34 GB | 7,94 GB (+1,60) | 8,12 GB (+0,18) |
+| Thời gian 300 bước | 45,3 phút | 47,0 phút (+4%) | 55,1 phút (+17%) |
+| Loss train (TB 50 bước cuối) | 0,572 | 0,520 | 0,525 |
+
+Chênh lệch, đo bằng **bootstrap ghép cặp** trên cùng tập ảnh lấy lại (`python -m vlmlab.compare`, 2.000 lần):
+
+| So sánh | ΔF1 | CI95 của Δ | P(Δ ≤ 0) |
+|---|---|---|---|
+| E1 → E2 | +0,065 | [+0,025; +0,107] | 0,002 |
+| E2 → E3 | +0,019 | [−0,021; +0,059] | 0,16 |
+| E1 → E3 | +0,084 | [+0,043; +0,126] | < 0,001 |
+
+- **Mở projector (E2) đáng giá nhất**: +0,065 F1 (+23% tương đối), có ý nghĩa thống kê, trong khi chỉ tốn thêm 1,6 GB VRAM và ~2 phút. Projector là "cổng" chuyển đặc trưng thị giác sang không gian token của LLM; nhiệm vụ của ta (box nhỏ, vết nứt mảnh trên mặt đường) khác xa dữ liệu pre-train, nên cho phép chỉnh cách đặc trưng được chiếu (và DeepStack đưa đặc trưng tầng thấp 5/11/17, giàu chi tiết vị trí, vào LLM) giúp cả ba lớp: pothole 0,174→0,213, crack 0,215→0,270, manhole 0,513→0,613.
+- **Thêm LoRA ViT (E3)** cho +0,019 nữa nhưng **CI95 của Δ chứa 0**: chưa thể khẳng định ViT LoRA có ích với 311 ảnh test. Chi phí: +17% thời gian (gradient phải chảy ngược qua 24 block ViT trên 880 patch/ảnh) và VRAM cao nhất. Lợi ích nhìn thấy chủ yếu ở pothole (0,213→0,258) và manhole nhỏ, đúng chỗ cần đặc trưng thị giác tốt hơn, nhưng vẫn trong biên nhiễu.
+- **Đáng đồng tiền nhất: E2.** Nếu ngân sách GPU cho phép thì E3 là setup có F1 điểm cao nhất (và tôi dùng E3 làm gốc cho E4), nhưng không nên tuyên bố E3 > E2.
+- VRAM: E3 > E2 > E1 vì (1) projector 109M tham số ở fp32 cần trọng số + gradient + 2 trạng thái Adam ≈ 109M × 16 byte ≈ 1,7 GB (khớp mức tăng 1,60 GB E1→E2); (2) E3 phải lưu activation của ViT cho backward (dù đã gradient checkpointing) cộng LoRA ViT; mức tăng nhỏ (0,18 GB) vì ViT chỉ ~300M tham số và ảnh chỉ 880 patch.
 
 ### Câu 8 — Tập test có 311 ảnh: khoảng tin cậy rộng thế nào, và điều đó giới hạn kết luận so sánh các setup ra sao?
 
-TODO_Q8
+Độ rộng CI95 bootstrap (theo ảnh) của F1: E0 0,055 · E1 0,076 · E2 0,080 · E3 0,086, tức là **≈ ±0,04 quanh mỗi F1**. Hai hệ quả:
+
+1. **Chồng CI không có nghĩa là "không khác nhau", và ngược lại.** CI riêng của E1 [0,246–0,322] và E2 [0,306–0,386] chồng nhau, nhưng bootstrap ghép cặp (lấy lại cùng một tập ảnh cho cả hai model, nên loại được phương sai do "ảnh khó/dễ" chung) cho Δ = +0,065 với CI [+0,025; +0,107], có ý nghĩa. Ngược lại E2 vs E3: Δ = +0,019, CI [−0,021; +0,059], không kết luận được. Nghĩa là với 311 ảnh, ta chỉ phân biệt được chênh lệch cỡ ≥ 0,04–0,05 F1; mọi khác biệt nhỏ hơn (như E2/E3, và nhiều ablation) là nhiễu.
+2. **311 ảnh không phải 311 mẫu độc lập.** Test chỉ có **3 phiên quay**: `vlc-2025-02-18-23` chiếm 213 ảnh (68%), `vlc-2025-02-19-17` 83 ảnh, `num-4` 15 ảnh; các frame trong một phiên cách nhau ~2 s nên tương quan mạnh. F1 của E3 theo phiên: 0,360 / 0,349 / 0,565, dao động lớn hơn nhiều so với CI theo ảnh. Bootstrap theo ảnh vì vậy **đánh giá thấp** độ bất định thật; bootstrap theo phiên (đơn vị độc lập đúng) chỉ có 3 phần tử nên gần như vô nghĩa (trong `compare.py` tôi in cả hai: CI theo phiên của E1→E3 là [+0,061; +0,299], rất lệch). Kết luận nào cũng chỉ nói được về "các con đường giống 3 phiên này".
+
+Vì vậy tôi chỉ kết luận chắc chắn: fine-tune ≫ zero-shot (Δ ≈ +0,19–0,28) và mở projector có ích; còn thứ hạng E2 vs E3 và E4 phải đọc là "chưa phân định".
 
 ### Câu 9 — Phân tích lỗi theo lớp: lớp nào kém nhất và vì sao (kích thước box, số mẫu, ngữ nghĩa)? Kèm ảnh minh hoạ.
 
-TODO_Q9
+F1 từng lớp (E3, setup tốt nhất): **pothole 0,258 < crack 0,274 ≪ manhole 0,648**. Recall theo diện tích box GT (E3, tập test):
+
+| Lớp | n test | Diện tích trung vị | recall box < 0,5% | 0,5–2% | > 2% |
+|---|---|---|---|---|---|
+| pothole | 121 | 0,42% | 14/68 = 0,21 | 14/46 = 0,30 | 1/7 |
+| crack | 299 | 1,98% | 0/15 = 0,00 | 33/136 = 0,24 | 51/148 = 0,34 |
+| manhole | 163 | 0,67% | 26/64 = 0,41 | 64/96 = 0,67 | 2/3 |
+
+- **Pothole kém nhất** dù có nhiều mẫu train nhất sau crack (1.074 box): box rất nhỏ (trung vị 0,42% khung hình ≈ 30×30 px trên ảnh 640×360, chỉ khoảng 1 token ảnh sau merge 2×2 với patch 16 px nên token 32×32 px), hình dạng/màu đa dạng (vũng nước, bóng, mảng vá trông giống ổ gà), và **ranh giới ngữ nghĩa với crack mơ hồ**: nhầm pothole→crack là kiểu nhầm lớp phổ biến nhất (E1: 16 box, E3: 12 box có IoU ≥ 0,5 với một pothole nhưng bị gọi là crack).
+- **Crack**: box là hình chữ nhật bao một vật **mảnh và dài**, ranh giới box tuỳ người gán nhãn nên IoU ≥ 0,5 khó đạt (recall chỉ 0,24–0,34 ngay cả với box lớn). Nhãn còn mơ hồ ở cách gom: ảnh `report/figures/e3/sai_vlcsnap-2025-02-19-17h03m29s526.jpg` có GT là một box "crack" lớn bao trọn vùng mặt đường hư hỏng chứa 3 ổ gà; model trả 6 box crack nhỏ, nên 0 TP dù nhìn bằng mắt là "đúng chỗ". Đây là lỗi của **định nghĩa nhãn** nhiều hơn là của model. E0 gần như không làm được crack (F1 0,027).
+- **Manhole tốt nhất**: vật thể cứng, hình tròn/vuông rõ ràng, màu kim loại tương phản, ranh giới box không mơ hồ, nên box dễ khớp IoU ≥ 0,5 (recall 0,67 ở box 0,5–2%).
+- Theo kích thước: với **mọi lớp, box < 0,5% là phần thua đậm** (crack 0/15), khớp với giới hạn độ phân giải 220 token ảnh.
+
+Ảnh minh hoạ (xanh lá = GT, vàng = dự đoán khớp, đỏ = dự đoán sai): `report/figures/e3/` (3 đúng + 3 sai, mỗi phiên quay một ảnh), `report/figures/e1/`, `report/figures/e0/`, chú thích TP/FP/FN trong `captions.tsv` từng thư mục. Ví dụ đúng `dung_vlcsnap-2025-02-19-17h04m49s140.jpg`: 3/3 ổ gà khớp, chỉ sót box crack lớn bao quanh.
 
 ### Câu 10 — E4: bạn đổi biến nào, kết quả thế nào, và kết luận có đáng tin không?
 
