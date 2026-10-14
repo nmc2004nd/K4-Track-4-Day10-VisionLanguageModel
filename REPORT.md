@@ -182,6 +182,26 @@ F1 từng lớp (E3, setup tốt nhất): **pothole 0,258 < crack 0,274 ≪ manh
 2. **Ảnh không độc lập.** Frame liền kề cách nhau trung vị 2,1 giây, nên CI theo ảnh hẹp hơn thực tế. Bootstrap theo phiên mới là đơn vị độc lập thật, nhưng test chỉ có 3 phiên. Kết quả theo phiên (Δ CI95 [−0,249; −0,090]) vẫn âm, nhưng với 3 phiên thì phân phối bootstrap rất thô (chỉ vài tổ hợp khác nhau), nên chỉ nên xem là kiểm tra chiều chứ không phải khoảng tin cậy đúng nghĩa.
 3. **Cùng số bước chứ không cùng số epoch.** Đây là lựa chọn có chủ đích để chỉ đổi một biến, nhưng nó nghĩa là data_size 0,1 bị train quá nhiều epoch. Con số 0,265 vì thế là "ít dữ liệu *và* overfit". Muốn tách riêng tác động của lượng dữ liệu cần thêm điểm 0,1 với khoảng 30 bước (cùng số epoch), hoặc early stopping trên val.
 
+**Ảnh E4 (data_size 0,1) trên test** — xanh lá = GT, vàng = dự đoán khớp, đỏ = dự đoán sai; chú thích kèm kết quả E3 trên cùng ảnh (`report/figures/e4_data_0.1/captions.tsv`):
+
+![E4 1](report/figures/e4_data_0.1/dung_vlcsnap-2025-02-18-23h13m55s630.jpg)
+*Hình 7. `dung_vlcsnap-2025-02-18-23h13m55s630.jpg` — Đúng — 2/2 nắp cống (TP 2, FP 0, FN 0); E3 cũng đúng 2/2. Manhole là lớp dễ nhất nên 142 ảnh vẫn đủ.*
+
+![E4 2](report/figures/e4_data_0.1/dung_vlcsnap-2025-02-19-17h09m37s477.jpg)
+*Hình 8. `dung_vlcsnap-2025-02-19-17h09m37s477.jpg` — Đúng — 2/2 vết nứt (TP 2, FP 0, FN 0); riêng ảnh này E4 còn tốt hơn E3 (E3: TP 0, FP 1, FN 2), cho thấy không phải ảnh nào cũng xấu đi.*
+
+![E4 3](report/figures/e4_data_0.1/dung_vlcsnap-00204.jpg)
+*Hình 9. `dung_vlcsnap-00204.jpg` — Đúng — 1 nắp cống (TP 1, FP 0, FN 0); giống E3.*
+
+![E4 4](report/figures/e4_data_0.1/sai_vlcsnap-2025-02-18-23h26m05s423.jpg)
+*Hình 10. `sai_vlcsnap-2025-02-18-23h26m05s423.jpg` — Sai — box manhole nằm đúng chỗ nhưng nhỏ hơn GT nên IoU < 0,5; box crack ở mặt đường trống (TP 0, FP 5, FN 5). E3 trên cùng ảnh: TP 1, FP 3.*
+
+![E4 5](report/figures/e4_data_0.1/sai_vlcsnap-2025-02-19-17h03m06s413.jpg)
+*Hình 11. `sai_vlcsnap-2025-02-19-17h03m06s413.jpg` — Sai — GT là box crack lớn bao vùng có nhiều ổ gà; E4 rải 6 box pothole nhỏ, chỉ 1 khớp (TP 1, FP 5, FN 4). E3: TP 1, FP 3. Đây là kiểu "đoán thừa box" đẩy FP/ảnh từ 1,08 lên 1,75.*
+
+![E4 6](report/figures/e4_data_0.1/sai_vlcsnap-00210.jpg)
+*Hình 12. `sai_vlcsnap-00210.jpg` — Sai — 2 box đặt đúng chỗ 2 ổ gà nhưng gọi là crack (sai lớp), thêm 2 box crack trên vạch kẻ đường/mép bóng (TP 0, FP 4, FN 2). E3: TP 0, FP 1.*
+
 Chi phí: VRAM và thời gian không đổi (7,78 GB, 49,5 phút), vì chi phí mỗi bước không phụ thuộc kích thước tập train.
 
 ## Nhìn lại
