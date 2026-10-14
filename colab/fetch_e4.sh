@@ -2,8 +2,8 @@
 # đợi e4.sh xong trên VM → tải adapter + dự đoán, chấm e4_data_size_0.1; giá trị 1.0 = chính setup gốc (E3)
 C=$(cd $(dirname $0) && pwd); cd $C/..
 D=e4_data_0.1
-dl(){ for i in 1 2 3 4 5; do colab download -s lab /content/lab/$1 $2 >/dev/null 2>&1 && [ -s $2 ] && return 0; sleep 10; done; echo "tải lỗi $1"; return 1; }
-until st=$($C/rsh 'grep -E "E4_EXIT|E4_ABORT|Error" e4.log | tail -2' 2>/dev/null); echo "$st" | grep -qE "E4_EXIT|E4_ABORT|Error"; do sleep 120; done
+dl(){ for i in 1 2 3 4 5; do timeout 600 colab download -s lab /content/lab/$1 $2 >/dev/null 2>&1 && [ -s $2 ] && return 0; sleep 10; done; echo "tải lỗi $1"; return 1; }
+until st=$($C/rsh 'grep -E "E4_EXIT|E4_ABORT|Error" e4.log | tail -2' 2>/dev/null); echo "$st" | grep -qE "E4_EXIT|E4_ABORT|Error"; do sleep 60; done
 echo "$st"; echo "$st" | grep -q "E4_EXIT=0" || exit 1
 mkdir -p work/$D
 for f in adapter_config.json adapter_model.safetensors run.json train_log.jsonl projector.pt; do dl work/$D/$f work/$D/$f; done

@@ -9,6 +9,6 @@ done
 colab sessions 2>&1 | grep -q lab || { echo "E4_ABORT không có VM"; exit 1; }
 echo "[rerun] $(date +%H:%M) có VM"
 tar czf $S/code.tgz scripts vlmlab configs requirements-colab.txt colab/e4_vm.sh
-for i in 1 2 3 4 5; do colab upload -s lab $S/code.tgz /content/code.tgz 2>&1 | grep -q Uploaded && break; sleep 10; done
+for i in 1 2 3 4 5; do timeout 600 colab upload -s lab $S/code.tgz /content/code.tgz 2>&1 | grep -q Uploaded && break; sleep 10; done
 $C/rsh 'tar xzf /content/code.tgz -C /content/lab && cp colab/e4_vm.sh e4.sh && (nohup bash e4.sh > e4.log 2>&1 &) && echo started'
 bash $C/fetch_e4.sh
