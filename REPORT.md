@@ -1,7 +1,7 @@
 Họ tên: Nguyễn Mạnh Cường — MSV: 2A202602823
 `dataset_version`: d10-21e4070301
 
-Môi trường: Colab T4 15 GB (điều khiển bằng `google-colab-cli` từ terminal), torch 2.11 + cu130, transformers 5.19.0, peft 0.21.2, bitsandbytes 0.50.2, trl 1.9.2. Mã của tôi: `vlmlab/` (`labels.py` nhãn/prompt/reward, `run.py` train/infer/inspect, `viz.py` ảnh, `grpo.py` E5), script điều khiển Colab trong `colab/`. Log: `report/logs/`, ảnh: `report/figures/`.
+Môi trường: Colab T4 15 GB (điều khiển bằng `google-colab-cli` từ terminal), torch 2.11 + cu130, transformers 5.19.0, peft 0.21.2, bitsandbytes 0.50.2, trl 1.9.2. Mã nguồn: `vlmlab/` (`labels.py` nhãn/prompt/reward, `run.py` train/infer/inspect, `viz.py` ảnh, `grpo.py` E5), script điều khiển Colab trong `colab/`. Log: `report/logs/`, ảnh: `report/figures/`.
 
 ## Bảng tổng hợp (số của bạn, lấy từ `report/evidence/*.json`)
 
@@ -46,7 +46,7 @@ Kết quả là F1 crack chỉ 0,027. Ảnh: `report/figures/e0/` (ví dụ `sai
 
 ### Câu 3 — Thang 0–1000: nếu chấm output theo pixel (hoặc ngược lại) thì F1 ra sao và vì sao? Bạn đã kiểm chứng điều này thế nào?
 
-Tôi chấm lại chính file dự đoán bằng `--coord pixel`:
+Chấm lại chính file dự đoán bằng `--coord pixel`:
 
 | Output | `--coord norm1000` (đúng) | `--coord pixel` (sai) |
 |---|---|---|
@@ -72,13 +72,13 @@ Lý do:
 
 ### Câu 5 — Vì sao không thể huấn luyện đầy đủ projector nếu ViT bị lượng tử hoá 4-bit, và bạn đã xử lý thế nào? Vì sao projector phải ở float32?
 
-**Tôi đã gặp đúng lỗi này.** Với `llm_int8_skip_modules=["visual", "lm_head"]` như GUIDE, transformers 5.19 vẫn lượng tử hoá ViT, vì `should_convert_module` so khớp bằng `re.match`, tức là neo ở **đầu** tên module. `"visual"` không khớp `model.visual.blocks.0.attn.qkv`. Dấu hiệu trong lần smoke test (`report/logs/smoke_vit_quantized_bug.txt`): số tham số projector đếm được là **54,6M, đúng một nửa 109,1M** (Params4bit gói 2 số/byte), sau đó crash `ValueError: Attempting to unscale FP16 gradients`.
+**Lỗi này đã xảy ra thật trong bài.** Với `llm_int8_skip_modules=["visual", "lm_head"]` như GUIDE, transformers 5.19 vẫn lượng tử hoá ViT, vì `should_convert_module` so khớp bằng `re.match`, tức là neo ở **đầu** tên module. `"visual"` không khớp `model.visual.blocks.0.attn.qkv`. Dấu hiệu trong lần smoke test (`report/logs/smoke_vit_quantized_bug.txt`): số tham số projector đếm được là **54,6M, đúng một nửa 109,1M** (Params4bit gói 2 số/byte), sau đó crash `ValueError: Attempting to unscale FP16 gradients`.
 
 Vì sao không huấn luyện được: trọng số Linear4bit là `uint8` đã lượng tử NF4 kèm hằng số scale; không có gradient cho chúng (bitsandbytes chỉ cho gradient đi qua tới đầu vào). Muốn "mở" merger thì phải có bản trọng số liên tục để optimizer cập nhật; nếu `.float()` một Params4bit, ta chỉ được bản ép kiểu của các byte đã gói, không phải trọng số thật. Muốn cập nhật thì phải giải lượng tử (mất chính xác) rồi lượng tử lại mỗi bước (sai số làm tròn NF4 lớn hơn bước cập nhật lr 2e-4, nên cập nhật bị "nuốt").
 
 Cách xử lý: `llm_int8_skip_modules=["model.visual", "visual", "lm_head"]` và thêm assert `Linear4bit trong ViT = 0` mỗi lần nạp model (log: `[load] Linear4bit: ViT=0  LLM=252`). Sau khi sửa, projector đếm đủ 109.105.152 tham số.
 
-Vì sao fp32: optimizer cập nhật `w ← w − lr·Δ`, với bước AdamW cỡ lr (2e-4 lúc đỉnh, giảm theo cosine về 0). fp16 chỉ có 10 bit mantissa: với |w| ≈ 0,05 (thang của trọng số merger), khoảng cách giữa hai số fp16 liền kề là 2⁻¹⁵ ≈ 3e-5. Nửa sau lịch cosine (lr < 3e-5) mọi cập nhật bị làm tròn về 0, và cả lúc lr lớn thì sai số làm tròn vẫn tích luỹ. Trạng thái Adam (m, v ~ grad²) cũng dễ underflow ở fp16. Ngoài ra `GradScaler` từ chối unscale gradient fp16 (đúng lỗi tôi gặp). Vì vậy tham số **huấn luyện** (LoRA, projector) giữ bản master fp32, còn phần đóng băng ở fp16/4-bit và forward chạy trong `autocast(fp16)`. Tôi thêm assert "mọi tham số `requires_grad` là fp32" trong `apply_setup`.
+Vì sao fp32: optimizer cập nhật `w ← w − lr·Δ`, với bước AdamW cỡ lr (2e-4 lúc đỉnh, giảm theo cosine về 0). fp16 chỉ có 10 bit mantissa: với |w| ≈ 0,05 (thang của trọng số merger), khoảng cách giữa hai số fp16 liền kề là 2⁻¹⁵ ≈ 3e-5. Nửa sau lịch cosine (lr < 3e-5) mọi cập nhật bị làm tròn về 0, và cả lúc lr lớn thì sai số làm tròn vẫn tích luỹ. Trạng thái Adam (m, v ~ grad²) cũng dễ underflow ở fp16. Ngoài ra `GradScaler` từ chối unscale gradient fp16 (đúng lỗi đã gặp ở E3). Vì vậy tham số **huấn luyện** (LoRA, projector) giữ bản master fp32, còn phần đóng băng ở fp16/4-bit và forward chạy trong `autocast(fp16)`. Đã thêm assert "mọi tham số `requires_grad` là fp32" trong `apply_setup`.
 
 ### Câu 6 — Split theo phiên quay: vì sao chia ngẫu nhiên sẽ cho F1 cao giả? Số ảnh và số box từng lớp ở mỗi split là bao nhiêu?
 
@@ -114,7 +114,7 @@ Chênh lệch, đo bằng **bootstrap ghép cặp** trên cùng tập ảnh lấ
 
 - **Mở projector (E2) đáng giá nhất**: +0,065 F1 (+23% tương đối), có ý nghĩa thống kê, trong khi chỉ tốn thêm 1,6 GB VRAM và ~2 phút. Projector là "cổng" chuyển đặc trưng thị giác sang không gian token của LLM; nhiệm vụ của ta (box nhỏ, vết nứt mảnh trên mặt đường) khác xa dữ liệu pre-train, nên cho phép chỉnh cách đặc trưng được chiếu (và DeepStack đưa đặc trưng tầng thấp 5/11/17, giàu chi tiết vị trí, vào LLM) giúp cả ba lớp: pothole 0,174→0,213, crack 0,215→0,270, manhole 0,513→0,613.
 - **Thêm LoRA ViT (E3)** cho +0,019 nữa nhưng **CI95 của Δ chứa 0**: chưa thể khẳng định ViT LoRA có ích với 311 ảnh test. Chi phí: +17% thời gian (gradient phải chảy ngược qua 24 block ViT trên 880 patch/ảnh) và VRAM cao nhất. Lợi ích nhìn thấy chủ yếu ở pothole (0,213→0,258) và manhole nhỏ, đúng chỗ cần đặc trưng thị giác tốt hơn, nhưng vẫn trong biên nhiễu.
-- **Đáng đồng tiền nhất: E2.** Nếu ngân sách GPU cho phép thì E3 là setup có F1 điểm cao nhất (và tôi dùng E3 làm gốc cho E4), nhưng không nên tuyên bố E3 > E2.
+- **Đáng đồng tiền nhất: E2.** Nếu ngân sách GPU cho phép thì E3 là setup có F1 điểm cao nhất (và được dùng làm gốc cho E4), nhưng không nên tuyên bố E3 > E2.
 - VRAM: E3 > E2 > E1 vì (1) projector 109M tham số ở fp32 cần trọng số + gradient + 2 trạng thái Adam ≈ 109M × 16 byte ≈ 1,7 GB (khớp mức tăng 1,60 GB E1→E2); (2) E3 phải lưu activation của ViT cho backward (dù đã gradient checkpointing) cộng LoRA ViT; mức tăng nhỏ (0,18 GB) vì ViT chỉ ~300M tham số và ảnh chỉ 880 patch.
 
 ### Câu 8 — Tập test có 311 ảnh: khoảng tin cậy rộng thế nào, và điều đó giới hạn kết luận so sánh các setup ra sao?
@@ -122,9 +122,9 @@ Chênh lệch, đo bằng **bootstrap ghép cặp** trên cùng tập ảnh lấ
 Độ rộng CI95 bootstrap (theo ảnh) của F1: E0 0,055 · E1 0,076 · E2 0,080 · E3 0,086, tức là **≈ ±0,04 quanh mỗi F1**. Hai hệ quả:
 
 1. **Chồng CI không có nghĩa là "không khác nhau", và ngược lại.** CI riêng của E1 [0,246–0,322] và E2 [0,306–0,386] chồng nhau, nhưng bootstrap ghép cặp (lấy lại cùng một tập ảnh cho cả hai model, nên loại được phương sai do "ảnh khó/dễ" chung) cho Δ = +0,065 với CI [+0,025; +0,107], có ý nghĩa. Ngược lại E2 vs E3: Δ = +0,019, CI [−0,021; +0,059], không kết luận được. Nghĩa là với 311 ảnh, ta chỉ phân biệt được chênh lệch cỡ ≥ 0,04–0,05 F1; mọi khác biệt nhỏ hơn (như E2/E3, và nhiều ablation) là nhiễu.
-2. **311 ảnh không phải 311 mẫu độc lập.** Test chỉ có **3 phiên quay**: `vlc-2025-02-18-23` chiếm 213 ảnh (68%), `vlc-2025-02-19-17` 83 ảnh, `num-4` 15 ảnh; các frame trong một phiên cách nhau ~2 s nên tương quan mạnh. F1 của E3 theo phiên: 0,360 / 0,349 / 0,565, dao động lớn hơn nhiều so với CI theo ảnh. Bootstrap theo ảnh vì vậy **đánh giá thấp** độ bất định thật; bootstrap theo phiên (đơn vị độc lập đúng) chỉ có 3 phần tử nên gần như vô nghĩa (trong `compare.py` tôi in cả hai: CI theo phiên của E1→E3 là [+0,061; +0,299], rất lệch). Kết luận nào cũng chỉ nói được về "các con đường giống 3 phiên này".
+2. **311 ảnh không phải 311 mẫu độc lập.** Test chỉ có **3 phiên quay**: `vlc-2025-02-18-23` chiếm 213 ảnh (68%), `vlc-2025-02-19-17` 83 ảnh, `num-4` 15 ảnh; các frame trong một phiên cách nhau ~2 s nên tương quan mạnh. F1 của E3 theo phiên: 0,360 / 0,349 / 0,565, dao động lớn hơn nhiều so với CI theo ảnh. Bootstrap theo ảnh vì vậy **đánh giá thấp** độ bất định thật; bootstrap theo phiên (đơn vị độc lập đúng) chỉ có 3 phần tử nên gần như vô nghĩa (`compare.py` in cả hai: CI theo phiên của E1→E3 là [+0,061; +0,299], rất lệch). Kết luận nào cũng chỉ nói được về "các con đường giống 3 phiên này".
 
-Vì vậy tôi chỉ kết luận chắc chắn: fine-tune ≫ zero-shot (Δ ≈ +0,19–0,28) và mở projector có ích; còn thứ hạng E2 vs E3 và E4 phải đọc là "chưa phân định".
+Vì vậy chỉ kết luận chắc chắn được: fine-tune ≫ zero-shot (Δ ≈ +0,19–0,28) và mở projector có ích; thứ hạng E2 vs E3 phải đọc là "chưa phân định". Riêng E4 (10% dữ liệu) thấp hơn E3 rõ ràng: CI95 của Δ ghép cặp là [−0,137; −0,065], nằm hẳn dưới 0 (câu 10).
 
 ### Câu 9 — Phân tích lỗi theo lớp: lớp nào kém nhất và vì sao (kích thước box, số mẫu, ngữ nghĩa)? Kèm ảnh minh hoạ.
 
@@ -186,16 +186,16 @@ Chi phí: VRAM và thời gian không đổi (7,78 GB, 49,5 phút), vì chi phí
 
 ## Nhìn lại
 
-**Lỗi tôi gặp mà công cụ chấm không bắt được:**
-- **ViT bị lượng tử hoá 4-bit một cách im lặng** (transformers 5.19 so khớp `llm_int8_skip_modules` bằng `re.match` từ đầu tên, nên `"visual"` không khớp `model.visual.*`). Không có cảnh báo nào; E0/E1 vẫn chạy bình thường. Tôi chỉ phát hiện vì số tham số projector ra 54,6M (một nửa 109,1M) và E3 crash khi unscale. Nếu chỉ chạy E0/E1 thì kết quả sẽ âm thầm dùng ViT 4-bit, khác đề. Tôi thêm assert `Linear4bit trong ViT = 0`.
+**Lỗi gặp phải mà công cụ chấm không bắt được:**
+- **ViT bị lượng tử hoá 4-bit một cách im lặng** (transformers 5.19 so khớp `llm_int8_skip_modules` bằng `re.match` từ đầu tên, nên `"visual"` không khớp `model.visual.*`). Không có cảnh báo nào; E0/E1 vẫn chạy bình thường. Lỗi chỉ lộ ra nhờ số tham số projector ra 54,6M (một nửa 109,1M) và E3 crash khi unscale. Nếu chỉ chạy E0/E1 thì kết quả sẽ âm thầm dùng ViT 4-bit, khác đề. Đã thêm assert `Linear4bit trong ViT = 0`.
 - **torchao 0.10 có sẵn trên Colab làm peft 0.21.2 crash** khi gắn LoRA vào lớp Linear fp16 của ViT (chỉ xảy ra ở E3, sau khi đã sửa lỗi trên). Gỡ torchao là đủ.
 - **Toàn bộ 2.009 ảnh đều có ít nhất một box** (0 ảnh rỗng ở cả ba split). Model không bao giờ được dạy trả `[]`, và test cũng không đo được báo động giả trên đường lành. FP/ảnh ≈ 1,1 chỉ đo trên ảnh có hư hại; trên dashcam thật (phần lớn khung hình không có hư hại) tỉ lệ báo động giả có thể tệ hơn nhiều.
 - **Nhãn chồng lấn giữa các lớp**: có box "crack" lớn bao trọn vùng chứa nhiều "pothole" (ví dụ `report/figures/e3/sai_vlcsnap-2025-02-19-17h03m29s526.jpg`). Trọng tài ghép cặp theo từng lớp với IoU ≥ 0,5 nên một dự đoán hợp lý về mặt ngữ nghĩa vẫn bị tính 1 FP + 1 FN.
 - **Một output hỏng xoá mọi box đúng của ảnh đó**: `parse_output` trả `None` cho cả ảnh nếu JSON bị cắt hoặc một box sai hình học. Các ảnh hỏng sau fine-tune (E1: 1, E2: 1, E3: 2 trên 311) **đều là JSON bị cắt cụt ở `max_new_tokens=256`** (≈ 443 ký tự) vì model lặp box trên ảnh nhiều hư hại, cùng kiểu lỗi với E0 nhưng hiếm hơn nhiều. Trọng tài chỉ thấy `parse_valid_rate`, không phân biệt "lặp vô hạn" với "JSON sai cú pháp".
-- **Colab free thu hồi VM** giữa lúc chạy E2 (mất ~1 giờ GPU) vì kết quả chưa được tải về. Từ đó tôi tải adapter ngay sau khi train xong (`colab/autofetch.sh`) và viết `pipeline.sh` bỏ qua bước đã xong.
+- **Colab free thu hồi VM** giữa lúc chạy E2 (mất ~1 giờ GPU) vì kết quả chưa được tải về. Từ đó adapter được tải về ngay sau khi train xong (`colab/autofetch.sh`) và `pipeline.sh` bỏ qua bước đã xong.
 
-**Điều tôi chưa hiểu / chưa kiểm chứng:**
-- E2 mở cả `merger` (27M) lẫn `deepstack_merger_list` (82M) cùng lúc, nên tôi không biết phần +0,065 F1 đến từ đâu; một ablation tách hai phần này sẽ trả lời câu hỏi DeepStack (đặc trưng ViT tầng 5/11/17) có quan trọng cho box nhỏ hay không.
-- Loss train của E3 không thấp hơn E2 (0,525 vs 0,520 trung bình 50 bước cuối) nhưng F1 test nhỉnh hơn; với CI hiện tại tôi không phân biệt được đây là tín hiệu thật hay nhiễu.
-- Tôi chưa thử độ phân giải ảnh cao hơn (nhiều hơn 220 token); với pothole trung vị chỉ ~1 token ảnh, đây có lẽ là đòn bẩy lớn hơn mọi cách mở khối.
-- E5 (GRPO) tôi bỏ vì giới hạn thời gian GPU. Hàm reward `vlmlab/labels.py::reward_iou` và 6 test (hoàn hảo, JSON hỏng, sai lớp, thừa box, rỗng, box khổng lồ) đã viết và chạy qua (`python -m pytest vlmlab/tests`); `vlmlab/grpo.py` đã viết theo API trl 1.9.2 nhưng **chưa chạy trên GPU**.
+**Điều chưa hiểu / chưa kiểm chứng:**
+- E2 mở cả `merger` (27M) lẫn `deepstack_merger_list` (82M) cùng lúc, nên chưa biết phần +0,065 F1 đến từ đâu; một ablation tách hai phần này sẽ trả lời câu hỏi DeepStack (đặc trưng ViT tầng 5/11/17) có quan trọng cho box nhỏ hay không.
+- Loss train của E3 không thấp hơn E2 (0,525 vs 0,520 trung bình 50 bước cuối) nhưng F1 test nhỉnh hơn; với CI hiện tại không phân biệt được đây là tín hiệu thật hay nhiễu.
+- Chưa thử độ phân giải ảnh cao hơn (nhiều hơn 220 token); với pothole trung vị chỉ ~1 token ảnh, đây có lẽ là đòn bẩy lớn hơn mọi cách mở khối.
+- E5 (GRPO) bị bỏ qua vì giới hạn thời gian GPU. Hàm reward `vlmlab/labels.py::reward_iou` và 6 test (hoàn hảo, JSON hỏng, sai lớp, thừa box, rỗng, box khổng lồ) đã viết và chạy qua (`python -m pytest vlmlab/tests`); `vlmlab/grpo.py` đã viết theo API trl 1.9.2 nhưng **chưa chạy trên GPU**.
