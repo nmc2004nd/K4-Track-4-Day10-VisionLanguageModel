@@ -143,6 +143,27 @@ F1 từng lớp (E3, setup tốt nhất): **pothole 0,258 < crack 0,274 ≪ manh
 
 Ảnh minh hoạ (xanh lá = GT, vàng = dự đoán khớp, đỏ = dự đoán sai): `report/figures/e3/`, `report/figures/e2/`, `report/figures/e1/` (mỗi thư mục 3 đúng + 3 sai, mỗi phiên quay một ảnh), `report/figures/e0/` (2 + 2), chú thích TP/FP/FN trong `captions.tsv` từng thư mục. Ví dụ đúng `dung_vlcsnap-2025-02-19-17h04m49s140.jpg`: 3/3 ổ gà khớp, chỉ sót box crack lớn bao quanh.
 
+**Ảnh E3 (setup tốt nhất) trên test** — xanh lá = box đúng (GT), vàng = dự đoán khớp (cùng lớp, IoU ≥ 0,5), đỏ = dự đoán sai:
+
+![E3 1](report/figures/e3/dung_vlcsnap-2025-02-18-23h13m50s113.jpg)
+*Hình 1. `dung_vlcsnap-2025-02-18-23h13m50s113.jpg` — Đúng — 2/2 nắp cống khớp (TP 2, FP 0, FN 0).*
+
+![E3 2](report/figures/e3/dung_vlcsnap-2025-02-19-17h04m49s140.jpg)
+*Hình 2. `dung_vlcsnap-2025-02-19-17h04m49s140.jpg` — Đúng — 3/3 ổ gà khớp, chỉ sót box crack lớn bao quanh (TP 3, FP 0, FN 1).*
+
+![E3 3](report/figures/e3/dung_vlcsnap-00202.jpg)
+*Hình 3. `dung_vlcsnap-00202.jpg` — Đúng — 1 nắp cống, box khớp (TP 1, FP 0, FN 0).*
+
+![E3 4](report/figures/e3/sai_vlcsnap-2025-02-18-23h30m29s418.jpg)
+*Hình 4. `sai_vlcsnap-2025-02-18-23h30m29s418.jpg` — Sai — đoán 7 box cho 3 vật; box crack gần nhất chỉ đạt IoU 0,46 (sát ngưỡng 0,5), pothole tốt nhất 0,29, các box còn lại rơi vào chỗ không có GT (TP 0, FP 7, FN 3).*
+
+![E3 5](report/figures/e3/sai_vlcsnap-2025-02-19-17h03m29s526.jpg)
+*Hình 5. `sai_vlcsnap-2025-02-19-17h03m29s526.jpg` — Sai — GT có 3 ổ gà + 1 crack bao trùm; model gọi cả 6 vùng là crack (nhầm lớp do nhãn chồng lấn; TP 0, FP 6, FN 4).*
+
+![E3 6](report/figures/e3/sai_vlcsnap-00201.jpg)
+*Hình 6. `sai_vlcsnap-00201.jpg` — Sai — bỏ sót nắp cống; box crack duy nhất không chồng lên vết nứt thật (IoU 0) (TP 0, FP 1, FN 2).*
+
+
 ### Câu 10 — E4: bạn đổi biến nào, kết quả thế nào, và kết luận có đáng tin không?
 
 **Biến đổi: `data_size`, 1,0 → 0,1.** Chọn E3 (F1 cao nhất trong E1–E3) làm gốc và giữ nguyên mọi thứ khác: setup (LoRA LLM + projector + LoRA ViT), rank 16, LR, 300 bước, batch 2 × 4, seed, prompt, toạ độ 0–1000. Chỉ lấy ngẫu nhiên 10% ảnh train (142 ảnh, `random.Random(42)`, `--train-fraction 0.1`). Điểm `data_size=1,0` chính là E3, nên chỉ cần thêm một lần train. Bằng chứng: `report/evidence/e4_data_size_{0.1,1.0}.json`, log `report/logs/e4_data_0.1_*`.
