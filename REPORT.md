@@ -11,9 +11,9 @@ Môi trường: Colab T4 15 GB (điều khiển bằng `google-colab-cli` từ t
 | E1 | LoRA LLM | 33.030.144 | 6,34 | 45,3 | 0,281 | 0,246–0,322 | 1,17 | 0,174 | 0,215 | 0,513 |
 | E2 | + projector | 142.135.296 | 7,94 | 47,0 | 0,346 | 0,306–0,386 | 1,11 | 0,213 | 0,270 | 0,613 |
 | E3 | + LoRA ViT | 148.426.752 | 8,12 | 55,1 | 0,365 | 0,322–0,408 | 1,08 | 0,258 | 0,274 | 0,648 |
-| E4 | TODO_E4 |
+| E4 | E3, data_size 0,1 (142/1.422 ảnh train) | 148.426.752 | 7,78 | 49,5 | 0,265 | 0,234–0,302 | 1,75 | 0,160 | 0,182 | 0,580 |
 
-(`parse_valid_rate`: E0 0,932 · E1 0,997 · E2 0,997 · E3 0,994. VRAM = `torch.cuda.max_memory_allocated`, thời gian = 300 bước tối ưu, batch 2 × tích luỹ 4.)
+(`parse_valid_rate`: E0 0,932 · E1 0,997 · E2 0,997 · E3 0,994 · E4 1,000. VRAM = `torch.cuda.max_memory_allocated`, thời gian = 300 bước tối ưu, batch 2 × tích luỹ 4.)
 
 ## 10 câu hỏi
 
@@ -145,7 +145,23 @@ F1 từng lớp (E3, setup tốt nhất): **pothole 0,258 < crack 0,274 ≪ manh
 
 ### Câu 10 — E4: bạn đổi biến nào, kết quả thế nào, và kết luận có đáng tin không?
 
-TODO_Q10
+**Biến đổi: `data_size`, 1,0 → 0,1.** Chọn E3 (F1 cao nhất trong E1–E3) làm gốc và giữ nguyên mọi thứ khác: setup (LoRA LLM + projector + LoRA ViT), rank 16, LR, 300 bước, batch 2 × 4, seed, prompt, toạ độ 0–1000. Chỉ lấy ngẫu nhiên 10% ảnh train (142 ảnh, `random.Random(42)`, `--train-fraction 0.1`). Điểm `data_size=1,0` chính là E3, nên chỉ cần thêm một lần train. Bằng chứng: `report/evidence/e4_data_size_{0.1,1.0}.json`, log `report/logs/e4_data_0.1_*`.
+
+| data_size | F1 | CI95 | P | R | FP/ảnh | dự đoán/ảnh | loss cuối (train) |
+|---|---|---|---|---|---|---|---|
+| 1,0 (E3) | 0,365 | 0,322–0,408 | 0,380 | 0,352 | 1,08 | 1,74 | 0,58 |
+| 0,1 | 0,265 | 0,234–0,302 | 0,240 | 0,295 | 1,75 | 2,31 | 0,013 |
+
+**Kết quả:** F1 giảm 0,100. Bootstrap ghép cặp theo ảnh (`python -m vlmlab.compare work/e3.jsonl work/e4_data_0.1.jsonl`, 2.000 lần) cho Δ = −0,100, CI95 [−0,137; −0,065], và 2.000/2.000 mẫu đều có Δ < 0. CI95 riêng của hai bên cũng không chồng nhau (0,234–0,302 so với 0,322–0,408). F1 giảm ở cả ba lớp (pothole 0,258→0,160, crack 0,274→0,182, manhole 0,648→0,580) và ở cả ba phiên quay test (num-4 0,565→0,316, vlc-18-23 0,360→0,264, vlc-19-17 0,349→0,259).
+
+**Cơ chế: học thuộc, không phải thiếu bước.** Với 142 ảnh, 300 bước × 8 ảnh nghĩa là mỗi ảnh được thấy khoảng 17 lần (E3 chỉ khoảng 1,7 lần). Loss train về 0,013 (E3 là 0,58), nhưng trên test model đoán nhiều box hơn (2,31 so với 1,74 mỗi ảnh; GT là 1,87), và phần lớn số dư là FP (545 so với 335), trong khi TP lại giảm (172 so với 205). Model học thuộc *số lượng và vị trí box của ảnh train* thay vì học nhận dạng hư hại. Format JSON thì học rất tốt (parse_valid 1,000), nên hình thức đầu ra là thứ "rẻ", còn grounding chính xác mới cần dữ liệu. E4 vẫn hơn hẳn zero-shot (+0,177 [+0,141; +0,213]) và ngang E1 (−0,016 [−0,055; +0,023], không có ý nghĩa). Vậy 142 ảnh với đủ các khối được mở khoá chỉ bằng 1.422 ảnh với riêng LoRA LLM.
+
+**Mức tin cậy:** đủ tin cho *chiều* của hiệu ứng (giảm), vì CI của Δ ghép cặp nằm hẳn dưới 0 và hiệu ứng nhất quán qua cả 3 lớp lẫn 3 phiên. Có ba giới hạn:
+1. **Chỉ 1 seed và 1 tập con 10%.** Phương sai do việc chọn 142 ảnh nào chưa được đo. Bootstrap chỉ đo nhiễu do tập test, không đo nhiễu huấn luyện.
+2. **Ảnh không độc lập.** Frame liền kề cách nhau trung vị 2,1 giây, nên CI theo ảnh hẹp hơn thực tế. Bootstrap theo phiên mới là đơn vị độc lập thật, nhưng test chỉ có 3 phiên. Kết quả theo phiên (Δ CI95 [−0,249; −0,090]) vẫn âm, nhưng với 3 phiên thì phân phối bootstrap rất thô (chỉ vài tổ hợp khác nhau), nên chỉ nên xem là kiểm tra chiều chứ không phải khoảng tin cậy đúng nghĩa.
+3. **Cùng số bước chứ không cùng số epoch.** Đây là lựa chọn có chủ đích để chỉ đổi một biến, nhưng nó nghĩa là data_size 0,1 bị train quá nhiều epoch. Con số 0,265 vì thế là "ít dữ liệu *và* overfit". Muốn tách riêng tác động của lượng dữ liệu cần thêm điểm 0,1 với khoảng 30 bước (cùng số epoch), hoặc early stopping trên val.
+
+Chi phí: VRAM và thời gian không đổi (7,78 GB, 49,5 phút), vì chi phí mỗi bước không phụ thuộc kích thước tập train.
 
 ## Nhìn lại
 
